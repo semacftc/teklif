@@ -1,0 +1,87 @@
+pragma solidity ^0.8.18;
+
+contract ProposalContract {
+    struct Proposal {
+        string description; // Teklifin açıklaması
+        uint256 approve; // Onay oylarının sayısı
+        uint256 reject; // Red oylarının sayısı
+        uint256 pass; // Çekimser oyların sayısı
+        uint256 total_vote_to_end; // Teklifin tamamlanması için gereken toplam oy sayısı
+        bool current_state; // Teklifin mevcut durumu
+        bool is_active; // Teklife oy verilip verilemeyeceğini gösterir
+    }
+
+    mapping(uint256 => Proposal) public proposal_history; // Teklif geçmişi
+    uint256 public proposal_counter; // Kaç teklif yapıldığını takip eden sayaç
+
+    address public owner;
+    address[] private voted_addresses; // Oy veren adresleri takip eder
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner can perform this action");
+        _;
+    }
+
+    modifier active(uint256 proposalId) {
+        require(proposal_history[proposalId].is_active, "The proposal is not active");
+        _;
+    }
+
+    function createProposal(
+        string memory _description,
+        uint256 _total_vote_to_end
+    ) public onlyOwner {
+        proposal_history[proposal_counter] = Proposal({
+            description: _description,
+            approve: 0,
+            reject: 0,
+            pass: 0,
+            total_vote_to_end: _total_vote_to_end,
+            current_state: false,
+            is_active: true
+        });
+        proposal_counter++;
+    }
+
+    function vote(uint256 proposalId, uint8 voteType) public active(proposalId) {
+        require(!hasVoted(msg.sender), "You have already voted");
+
+        if (voteType == 1) {
+            proposal_history[proposalId].approve++;
+        } else if (voteType == 2) {
+            proposal_history[proposalId].reject++;
+        } else if (voteType == 3) {
+            proposal_history[proposalId].pass++;
+        } else {
+            revert("Invalid vote type");
+        }
+
+        voted_addresses.push(msg.sender);
+
+        // Teklifin tamamlanma kontrolü
+        if (
+            proposal_history[proposalId].approve +
+                proposal_history[proposalId].reject +
+                proposal_history[proposalId].pass >=
+            proposal_history[proposalId].total_vote_to_end
+        ) {
+            proposal_history[proposalId].is_active = false;
+            proposal_history[proposalId].current_state =
+                proposal_history[proposalId].approve >
+                proposal_history[proposalId].reject;
+        }
+    }
+
+    function hasVoted(address user) internal view returns (bool) {
+        for (uint256 i = 0; i < voted_addresses.length; i++) {
+            if (voted_addresses[i] == user) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
